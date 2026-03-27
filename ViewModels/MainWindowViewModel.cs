@@ -9,6 +9,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using System;
+using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
@@ -23,6 +24,87 @@ public partial class MainWindowViewModel : ViewModelBase
     private WriteableBitmap? _resultImage;
 
     [ObservableProperty]
+    private string _pointsText = "0,0; 128,128; 255,255";
+
+    [ObservableProperty]
+    private ObservableCollection<CurvePointViewModel> _editorPoints = new();
+
+    [ObservableProperty]
+    private ObservableCollection<Point> _curvePoints = new();
+
+    [ObservableProperty]
+    private ObservableCollection<Point> _histogramPoints = new();
+
+    private bool _isUpdatingFromEditor = false;
+
+    partial void OnPointsTextChanged(string value)
+    {
+        _ = UpdateResultAsync();
+        if (!_isUpdatingFromEditor)
+        {
+            UpdateEditorPointsFromText();
+        }
+    }
+
+    /// <summary>Called from code-behind after user drags a point. Updates PointsText and redraws curve preview immediately.</summary>
+    public void UpdateFromEditor()
+    {
+        _isUpdatingFromEditor = true;
+        var sorted = EditorPoints.OrderBy(p => p.X).ToList();
+        
+        // Rebuild CurvePoints immediately for instant visual feedback
+        var lut = GetLutFromSortedEditorPoints(sorted);
+        if (lut != null) RebuildCurvePoints(lut);
+
+        // Update text (triggers image rerender with throttle)
+        PointsText = string.Join("; ", sorted.Select(p => $"{p.X:F0},{(255 - p.Y):F0}"));
+        _isUpdatingFromEditor = false;
+    }
+
+    private byte[]? GetLutFromSortedEditorPoints(List<CurvePointViewModel> sorted)
+    {
+        if (sorted.Count == 0) return null;
+        double[] xs = sorted.Select(p => Math.Clamp(p.X, 0, 255)).ToArray();
+        double[] ys = sorted.Select(p => Math.Clamp(255 - p.Y, 0, 255)).ToArray();
+        return SplineInterpolator.CreateLut(xs, ys);
+    }
+
+    private void RebuildCurvePoints(byte[] lut)
+    {
+        var curvePts = new ObservableCollection<Point>();
+        for (int i = 0; i < 256; i++)
+            curvePts.Add(new Point(i, 255 - lut[i]));
+        CurvePoints = curvePts;
+    }
+
+    private void UpdateEditorPointsFromText()
+    {
+        try
+        {
+            var parts = PointsText.Split(new[] { ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+            var parsedPoints = new List<(double x, double y)>();
+            foreach (var p in parts)
+            {
+                var coords = p.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                if (coords.Length == 2 && double.TryParse(coords[0].Trim(), out double x) && double.TryParse(coords[1].Trim(), out double y))
+                    parsedPoints.Add((x, y));
+            }
+            
+            // Ensure edge points always exist
+            if (!parsedPoints.Any(p => p.x <= 0)) parsedPoints.Insert(0, (0, 0));
+            if (!parsedPoints.Any(p => p.x >= 255)) parsedPoints.Add((255, 255));
+
+            EditorPoints.Clear();
+            foreach (var (x, y) in parsedPoints.OrderBy(p => p.x))
+            {
+                bool isEdge = x <= 0 || x >= 255;
+                EditorPoints.Add(new CurvePointViewModel(Math.Clamp(x, 0, 255), 255 - Math.Clamp(y, 0, 255), isEdge));
+            }
+        }
+        catch { }
+    }
+
+    [ObservableProperty]
     private bool _isProcessing;
 
     public ObservableCollection<ImageOperation> Operations { get; } = new(Enum.GetValues<ImageOperation>());
@@ -32,6 +114,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public MainWindowViewModel()
     {
         Layers.CollectionChanged += Layers_CollectionChanged;
+        UpdateEditorPointsFromText();
     }
 
     private void Layers_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -123,12 +206,82 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    private byte[]? GetLutAndCurve()
+    {
+        if (string.IsNullOrWhiteSpace(PointsText)) return null;
+        try
+        {
+            var parts = PointsText.Split(new[] { ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+            var parsedPoints = new List<Point>();
+            foreach (var p in parts)
+            {
+                var coords = p.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                if (coords.Length == 2 && double.TryParse(coords[0].Trim(), out double x) && double.TryParse(coords[1].Trim(), out double y))
+                {
+                    parsedPoints.Add(new Point(x, y));
+                }
+            }
+
+            if (parsedPoints.Count == 0) return null;
+
+            parsedPoints = parsedPoints.OrderBy(p => p.X).ToList();
+            
+            double[] xs = parsedPoints.Select(p => p.X).ToArray();
+            double[] ys = parsedPoints.Select(p => p.Y).ToArray();
+
+            var lut = SplineInterpolator.CreateLut(xs, ys);
+
+            var curvePts = new ObservableCollection<Point>();
+            for (int i = 0; i < 256; i++)
+            {
+                curvePts.Add(new Point(i, 255 - lut[i])); 
+            }
+            CurvePoints = curvePts;
+
+            return lut;
+        }
+        catch 
+        {
+            return null;
+        }
+    }
+
+    private void UpdateHistogram(int[]? hist)
+    {
+        if (hist == null)
+        {
+            HistogramPoints = new ObservableCollection<Point>();
+            return;
+        }
+
+        int max = hist.Max();
+        if (max == 0) max = 1;
+
+        var pts = new ObservableCollection<Point>();
+        pts.Add(new Point(0, 255));
+        for (int i = 0; i < 256; i++)
+        {
+            double h = (double)hist[i] / max * 255.0;
+            pts.Add(new Point(i, 255 - h));
+        }
+        pts.Add(new Point(255, 255));
+
+        HistogramPoints = pts;
+    }
+
+    private int _updateId = 0;
     private async Task UpdateResultAsync()
     {
+        int currentId = ++_updateId;
+        await Task.Delay(30);
+        if (currentId != _updateId) return;
+
         if (Layers.Count == 0)
         {
             var old = ResultImage;
             ResultImage = null;
+            UpdateHistogram(null);
+            CurvePoints.Clear();
             old?.Dispose();
             return;
         }
@@ -137,7 +290,12 @@ public partial class MainWindowViewModel : ViewModelBase
         try
         {
             var oldImage = ResultImage;
-            ResultImage = await ImageProcessor.ProcessLayersAsync(Layers.ToList());
+            byte[]? lut = GetLutAndCurve();
+            var processResult = await ImageProcessor.ProcessLayersAsync(Layers.ToList(), lut);
+            
+            ResultImage = processResult.Image;
+            UpdateHistogram(processResult.Histogram);
+
             oldImage?.Dispose();
         }
         finally

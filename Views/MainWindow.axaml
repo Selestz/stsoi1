@@ -56,10 +56,71 @@
         </Border>
 
         <!-- Result Panel -->
-        <Grid Grid.Column="1" Background="#202020">
-            <Image Source="{Binding ResultImage}" Stretch="Uniform" Margin="20"/>
+        <Grid Grid.Column="1" Background="#202020" RowDefinitions="*, 300">
+            <Image Grid.Row="0" Source="{Binding ResultImage}" Stretch="Uniform" Margin="20"/>
             
-            <Border Background="#A0000000" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="20" CornerRadius="8" IsVisible="{Binding IsProcessing}">
+            <Border Grid.Row="1" Background="#303030" Padding="15" Margin="20,0,20,20" CornerRadius="8">
+                <Grid ColumnDefinitions="256, *">
+                    <!-- Histogram and Curve Canvas -->
+                    <Border Grid.Column="0" Width="256" Height="256" Background="Black" BorderBrush="Gray" BorderThickness="1">
+                        <Canvas x:Name="GraphCanvas" Width="256" Height="256" Background="Transparent" ClipToBounds="True" PointerPressed="GraphCanvas_PointerPressed" PointerMoved="GraphCanvas_PointerMoved" PointerReleased="GraphCanvas_PointerReleased">
+                            <Polygon Points="{Binding HistogramPoints}" Fill="#5588cc" Opacity="0.8" IsHitTestVisible="False"/>
+                            <Polyline Points="{Binding CurvePoints}" Stroke="White" StrokeThickness="2" IsHitTestVisible="False"/>
+                            <!-- Grid lines -->
+                            <Line StartPoint="0,128" EndPoint="256,128" Stroke="#404040" StrokeThickness="1" IsHitTestVisible="False"/>
+                            <Line StartPoint="128,0" EndPoint="128,256" Stroke="#404040" StrokeThickness="1" IsHitTestVisible="False"/>
+
+                            <ItemsControl ItemsSource="{Binding EditorPoints}" IsHitTestVisible="False">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <Canvas Width="256" Height="256" Background="Transparent" IsHitTestVisible="False"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:CurvePointViewModel">
+                                        <Grid IsHitTestVisible="False">
+                                            <!-- Edge point: orange, larger -->
+                                            <Ellipse Width="14" Height="14" Margin="-7,-7,0,0"
+                                                     Fill="OrangeRed" Stroke="White" StrokeThickness="2"
+                                                     IsVisible="{Binding IsEdge}" IsHitTestVisible="False"/>
+                                            <!-- Mid point: blue-white -->
+                                            <Ellipse Width="12" Height="12" Margin="-6,-6,0,0"
+                                                     Fill="White" Stroke="DodgerBlue" StrokeThickness="2.5"
+                                                     IsVisible="{Binding IsNotEdge}"
+                                                     IsHitTestVisible="False"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                                <ItemsControl.Styles>
+                                    <Style Selector="ContentPresenter" x:DataType="vm:CurvePointViewModel">
+                                        <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                                        <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                                    </Style>
+                                </ItemsControl.Styles>
+                            </ItemsControl>
+                        </Canvas>
+                    </Border>
+                    
+                    <!-- Points Editor -->
+                    <StackPanel Grid.Column="1" Margin="20,0,0,0" Spacing="6">
+                        <TextBlock Text="Кривая градационного преобразования" Foreground="LightGray" FontWeight="Bold" FontSize="13"/>
+                        
+                        <Border Background="#1AFFFFFF" CornerRadius="5" Padding="10">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Левый клик на пустом месте — добавить точку" Foreground="#aaa" FontSize="11"/>
+                                <TextBlock Text="Перетащить точку — изменить кривую" Foreground="#aaa" FontSize="11"/>
+                                <TextBlock Text="Правый клик по точке — удалить" Foreground="#aaa" FontSize="11"/>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="Текстовый ввод (X,Y):" Foreground="Gray" FontSize="12" Margin="0,4,0,0"/>
+                        <TextBox Text="{Binding PointsText}" AcceptsReturn="True" Height="120" FontFamily="Consolas"/>
+                        <TextBlock Text="* Кубическая сплайн-интерполяция" Foreground="#666" FontSize="11" FontStyle="Italic"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border Grid.RowSpan="2" Background="#A0000000" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="20" CornerRadius="8" IsVisible="{Binding IsProcessing}">
                 <TextBlock Text="Пересчет слоев..." Foreground="White" FontSize="18" FontWeight="Bold"/>
             </Border>
         </Grid>

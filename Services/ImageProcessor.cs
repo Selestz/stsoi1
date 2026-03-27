@@ -13,11 +13,17 @@ public enum ImageOperation { None, Sum, Difference, Product, Average, Min, Max, 
 public enum ChannelMode { RGB, R, G, B, RG, GB, RB }
 public enum MaskShape { None, Circle, Square, Rectangle }
 
+public class ProcessResult
+{
+    public WriteableBitmap? Image { get; set; }
+    public int[]? Histogram { get; set; }
+}
+
 public class ImageProcessor
 {
-    public static async Task<WriteableBitmap?> ProcessLayersAsync(List<LayerViewModel> layers)
+    public static async Task<ProcessResult> ProcessLayersAsync(List<LayerViewModel> layers, byte[]? lut)
     {
-        if (layers == null || layers.Count == 0) return null;
+        if (layers == null || layers.Count == 0) return new ProcessResult();
 
         return await Task.Run(() => 
         {
@@ -34,7 +40,7 @@ public class ImageProcessor
                     }
                 }
 
-                if (targetW == 0 || targetH == 0) return null;
+                if (targetW == 0 || targetH == 0) return new ProcessResult();
 
                 byte[] result = new byte[targetW * targetH * 4];
 
@@ -129,6 +135,27 @@ public class ImageProcessor
                     }
                 }
 
+                int[] hist = new int[256];
+                for (int i = 0; i < result.Length; i += 4)
+                {
+                    byte b = result[i];
+                    byte g = result[i + 1];
+                    byte r = result[i + 2];
+
+                    if (lut != null)
+                    {
+                        b = lut[b];
+                        g = lut[g];
+                        r = lut[r];
+                        result[i] = b;
+                        result[i + 1] = g;
+                        result[i + 2] = r;
+                    }
+                    
+                    int intensity = (r + g + b) / 3;
+                    hist[Math.Clamp(intensity, 0, 255)]++;
+                }
+
                 var resultBmp = new WriteableBitmap(
                     new PixelSize(targetW, targetH),
                     new Vector(96, 96),
@@ -140,11 +167,11 @@ public class ImageProcessor
                     System.Runtime.InteropServices.Marshal.Copy(result, 0, fb.Address, result.Length);
                 }
 
-                return resultBmp;
+                return new ProcessResult { Image = resultBmp, Histogram = hist };
             }
             catch(Exception)
             {
-                return null;
+                return new ProcessResult();
             }
         });
     }
