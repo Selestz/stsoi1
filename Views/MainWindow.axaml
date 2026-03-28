@@ -8,7 +8,7 @@
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/avalonia-logo.ico"
         DragDrop.AllowDrop="True"
-        Title="Первая лаба по сцои" Width="1200" Height="800">
+        Title="Две первые лабы сцои" Width="1200" Height="800">
 
     <Design.DataContext>
         <vm:MainWindowViewModel/>
@@ -120,9 +120,9 @@
                 </Grid>
             </Border>
 
-            <Border Grid.RowSpan="2" Background="#A0000000" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="20" CornerRadius="8" IsVisible="{Binding IsProcessing}">
+            <!-- <Border Grid.RowSpan="2" Background="#A0000000" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="20" CornerRadius="8" IsVisible="{Binding IsProcessing}">
                 <TextBlock Text="Пересчет слоев..." Foreground="White" FontSize="18" FontWeight="Bold"/>
-            </Border>
+            </Border> -->
         </Grid>
     </Grid>
 </Window>

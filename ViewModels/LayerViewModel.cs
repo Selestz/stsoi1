@@ -28,7 +28,7 @@ public partial class LayerViewModel : ViewModelBase, IDisposable
     private ChannelMode _selectedChannelMode = ChannelMode.RGB;
 
     [ObservableProperty]
-    private MaskShape _selectedMaskShape = MaskShape.Circle;
+    private MaskShape _selectedMaskShape = MaskShape.None;
 
     public WriteableBitmap? BitmapCache { get; private set; }
 
