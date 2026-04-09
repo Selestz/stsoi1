@@ -107,6 +107,24 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isProcessing;
 
+    [ObservableProperty]
+    private bool _isBinarizationEnabled = false;
+    partial void OnIsBinarizationEnabledChanged(bool value) => _ = UpdateResultAsync();
+
+    [ObservableProperty]
+    private BinarizationMethod _selectedBinarizationMethod = BinarizationMethod.Gavrilov;
+    partial void OnSelectedBinarizationMethodChanged(BinarizationMethod value) => _ = UpdateResultAsync();
+
+    [ObservableProperty]
+    private int _binarizationWindowSize = 15;
+    partial void OnBinarizationWindowSizeChanged(int value) => _ = UpdateResultAsync();
+
+    [ObservableProperty]
+    private double _binarizationK = 0.2;
+    partial void OnBinarizationKChanged(double value) => _ = UpdateResultAsync();
+
+    public ObservableCollection<BinarizationMethod> BinarizationMethods { get; } = new(Enum.GetValues<BinarizationMethod>());
+
     public ObservableCollection<ImageOperation> Operations { get; } = new(Enum.GetValues<ImageOperation>());
     public ObservableCollection<ChannelMode> Channels { get; } = new(Enum.GetValues<ChannelMode>());
     public ObservableCollection<MaskShape> MaskShapes { get; } = new(Enum.GetValues<MaskShape>());
@@ -291,7 +309,13 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             var oldImage = ResultImage;
             byte[]? lut = GetLutAndCurve();
-            var processResult = await ImageProcessor.ProcessLayersAsync(Layers.ToList(), lut);
+            var processResult = await ImageProcessor.ProcessLayersAsync(
+                Layers.ToList(), 
+                lut,
+                IsBinarizationEnabled,
+                SelectedBinarizationMethod,
+                BinarizationWindowSize,
+                BinarizationK);
             
             ResultImage = processResult.Image;
             UpdateHistogram(processResult.Histogram);
