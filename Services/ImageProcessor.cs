@@ -13,6 +13,7 @@ public enum ImageOperation { None, Sum, Difference, Product, Average, Min, Max, 
 public enum ChannelMode { RGB, R, G, B, RG, GB, RB }
 public enum MaskShape { None, Circle, Square, Rectangle }
 public enum BinarizationMethod { None, Gavrilov, Otsu, Niblack, Sauvola, Wolf, BradleyRoth }
+public enum FilterMethod { None, Median, Gaussian, Linear }
 
 public class ProcessResult
 {
@@ -22,7 +23,7 @@ public class ProcessResult
 
 public class ImageProcessor
 {
-    private static void ApplyBinarization(byte[] result, int w, int h, BinarizationMethod method, int a, double k)
+    private static void ApplyBinarization(byte[] result, int w, int h, BinarizationMethod method, int a, double k, Action<double>? progress = null)
     {
         byte[] I = new byte[w * h];
         for (int i = 0; i < w * h; i++)
@@ -87,6 +88,7 @@ public class ImageProcessor
                     sum[x, y] = s;
                     sqSum[x, y] = sq;
                 }
+                if (y % 10 == 0) progress?.Invoke((double)y / h * 50.0);
             }
 
             int R_val = 128;
@@ -154,6 +156,8 @@ public class ImageProcessor
                         B[y * w + x] = pixel < t ? (byte)0 : (byte)255;
                     }
                 }
+                
+                if (y % 10 == 0) progress?.Invoke(50.0 + (double)y / h * 50.0);
             }
         }
 
@@ -171,7 +175,13 @@ public class ImageProcessor
         bool enableBinarization = false,
         BinarizationMethod binMethod = BinarizationMethod.None,
         int binWindowSize = 15,
-        double binK = 0.2)
+        double binK = 0.2,
+        bool enableFilter = false,
+        FilterMethod filterMethod = FilterMethod.None,
+        int filterKw = 13,
+        int filterKh = 13,
+        double filterSigma = 3.0,
+        IProgress<double>? progress = null)
     {
         if (layers == null || layers.Count == 0) return new ProcessResult();
 
@@ -179,6 +189,11 @@ public class ImageProcessor
         {
             try
             {
+                int totalStages = 1 /* blend */ + (enableFilter && filterMethod != FilterMethod.None ? 1 : 0) + (enableBinarization && binMethod != BinarizationMethod.None ? 1 : 0) + 1 /* hist */;
+                double currentStage = 0;
+                double stageWeight = 100.0 / totalStages;
+                Action<double> report = (percent) => progress?.Report(currentStage * stageWeight + percent * stageWeight / 100.0);
+
                 int targetW = 0;
                 int targetH = 0;
                 foreach (var l in layers)
@@ -284,10 +299,39 @@ public class ImageProcessor
                         }
                     }
                 }
+                
+                currentStage++;
+                report(0);
+
+                if (enableFilter && filterMethod != FilterMethod.None)
+                {
+                    if (filterMethod == FilterMethod.Median)
+                        ApplyMedianFilter(result, targetW, targetH, filterKw, filterKh, report);
+                    else if (filterMethod == FilterMethod.Gaussian)
+                    {
+                        double[] kernelX = Generate1DGaussianKernel(filterKw, filterSigma);
+                        double[] kernelY = Generate1DGaussianKernel(filterKh, filterSigma);
+                        ApplySeparableFilter(result, targetW, targetH, kernelX, kernelY, report);
+                    }
+                    else if (filterMethod == FilterMethod.Linear)
+                    {
+                        double[] kernelX = new double[filterKw];
+                        for (int i = 0; i < filterKw; i++) kernelX[i] = 1.0 / filterKw;
+                        
+                        double[] kernelY = new double[filterKh];
+                        for (int i = 0; i < filterKh; i++) kernelY[i] = 1.0 / filterKh;
+                        
+                        ApplySeparableFilter(result, targetW, targetH, kernelX, kernelY, report);
+                    }
+                    currentStage++;
+                    report(0);
+                }
 
                 if (enableBinarization && binMethod != BinarizationMethod.None)
                 {
-                    ApplyBinarization(result, targetW, targetH, binMethod, binWindowSize, binK);
+                    ApplyBinarization(result, targetW, targetH, binMethod, binWindowSize, binK, report);
+                    currentStage++;
+                    report(0);
                 }
 
                 int[] hist = new int[256];
@@ -389,5 +433,263 @@ public class ImageProcessor
             }
         }
         return dst;
+    }
+
+    private static int Mirror(int x, int max)
+    {
+        if (x < 0) return -x;
+        if (x >= max) return 2 * max - 2 - x;
+        return x;
+    }
+
+    private static void Swap(byte[] arr, int i, int j)
+    {
+        byte temp = arr[i];
+        arr[i] = arr[j];
+        arr[j] = temp;
+    }
+
+    private static int Partition(byte[] arr, int left, int right)
+    {
+        byte pivot = arr[left + (right - left) / 2];
+        int i = left - 1;
+        int j = right + 1;
+        while (true)
+        {
+            do { i++; } while (arr[i] < pivot);
+            do { j--; } while (arr[j] > pivot);
+            if (i >= j) return j;
+            Swap(arr, i, j);
+        }
+    }
+
+    private static byte QuickSelect(byte[] arr, int left, int right, int k)
+    {
+        while (left < right)
+        {
+            int pivotIndex = Partition(arr, left, right);
+            if (k <= pivotIndex)
+                right = pivotIndex;
+            else
+                left = pivotIndex + 1;
+        }
+        return arr[k];
+    }
+
+    public static double[] Generate1DGaussianKernel(int k, double sigma)
+    {
+        double[] kernel = new double[k];
+        int kHalf = k / 2;
+        double sum = 0;
+        
+        for (int i = 0; i < k; i++)
+        {
+            int d = i - kHalf;
+            double val = Math.Exp(-(d * d) / (2 * sigma * sigma));
+            kernel[i] = val;
+            sum += val;
+        }
+        
+        for (int i = 0; i < k; i++)
+        {
+            kernel[i] /= sum;
+        }
+        
+        return kernel;
+    }
+
+    public static void ApplySeparableFilter(byte[] pixels, int width, int height, double[] kernelX, double[] kernelY, Action<double>? progress = null)
+    {
+        int kw = kernelX.Length;
+        int kh = kernelY.Length;
+        
+        byte[] temp = new byte[pixels.Length];
+        
+        int kwHalf = kw / 2;
+        int khHalf = kh / 2;
+
+        int rowsProcessed = 0;
+        
+        // Горизонтальный проход
+        Parallel.For(0, height, y =>
+        {
+            for (int x = 0; x < width; x++)
+            {
+                double sumB = 0, sumG = 0, sumR = 0;
+                
+                for (int kx = 0; kx < kw; kx++)
+                {
+                    int px = Mirror(x + kx - kwHalf, width);
+                    int pidx = (y * width + px) * 4;
+                    double wVal = kernelX[kx];
+                    
+                    sumB += pixels[pidx] * wVal;
+                    sumG += pixels[pidx + 1] * wVal;
+                    sumR += pixels[pidx + 2] * wVal;
+                }
+                
+                int index = (y * width + x) * 4;
+                temp[index] = (byte)Math.Clamp(sumB, 0, 255);
+                temp[index + 1] = (byte)Math.Clamp(sumG, 0, 255);
+                temp[index + 2] = (byte)Math.Clamp(sumR, 0, 255);
+                temp[index + 3] = pixels[index + 3];
+            }
+            
+            int cur = System.Threading.Interlocked.Increment(ref rowsProcessed);
+            if (cur % 5 == 0) progress?.Invoke((double)cur / (2 * height) * 100.0);
+        });
+
+        // Вертикальный проход
+        Parallel.For(0, height, y =>
+        {
+            for (int x = 0; x < width; x++)
+            {
+                double sumB = 0, sumG = 0, sumR = 0;
+                
+                for (int ky = 0; ky < kh; ky++)
+                {
+                    int py = Mirror(y + ky - khHalf, height);
+                    int pidx = (py * width + x) * 4;
+                    double wVal = kernelY[ky];
+                    
+                    sumB += temp[pidx] * wVal;
+                    sumG += temp[pidx + 1] * wVal;
+                    sumR += temp[pidx + 2] * wVal;
+                }
+                
+                int index = (y * width + x) * 4;
+                pixels[index] = (byte)Math.Clamp(sumB, 0, 255);
+                pixels[index + 1] = (byte)Math.Clamp(sumG, 0, 255);
+                pixels[index + 2] = (byte)Math.Clamp(sumR, 0, 255);
+                pixels[index + 3] = temp[index + 3];
+            }
+            
+            int cur = System.Threading.Interlocked.Increment(ref rowsProcessed);
+            if (cur % 5 == 0) progress?.Invoke((double)cur / (2 * height) * 100.0);
+        });
+    }
+
+    public static double[,] GenerateGaussianKernel(int kw, int kh, double sigma)
+    {
+        double[,] kernel = new double[kh, kw];
+        int kwHalf = kw / 2;
+        int khHalf = kh / 2;
+        double sum = 0;
+        
+        for (int y = 0; y < kh; y++)
+        {
+            for (int x = 0; x < kw; x++)
+            {
+                int dx = x - kwHalf;
+                int dy = y - khHalf;
+                double val = Math.Exp(-(dx * dx + dy * dy) / (2 * sigma * sigma)) / (2 * Math.PI * sigma * sigma);
+                kernel[y, x] = val;
+                sum += val;
+            }
+        }
+        
+        for (int y = 0; y < kh; y++)
+        {
+            for (int x = 0; x < kw; x++)
+            {
+                kernel[y, x] /= sum;
+            }
+        }
+        
+        return kernel;
+    }
+
+    public static void ApplyLinearFilter(byte[] pixels, int width, int height, double[,] kernel, Action<double>? progress = null)
+    {
+        int kw = kernel.GetLength(1);
+        int kh = kernel.GetLength(0);
+        int kwHalf = kw / 2;
+        int khHalf = kh / 2;
+
+        byte[] result = new byte[pixels.Length];
+        
+        int rowsProcessed = 0;
+        Parallel.For(0, height, y =>
+        {
+            for (int x = 0; x < width; x++)
+            {
+                double sumB = 0, sumG = 0, sumR = 0;
+                
+                for (int ky = 0; ky < kh; ky++)
+                {
+                    for (int kx = 0; kx < kw; kx++)
+                    {
+                        int py = Mirror(y + ky - khHalf, height);
+                        int px = Mirror(x + kx - kwHalf, width);
+                        
+                        int pidx = (py * width + px) * 4;
+                        double wVal = kernel[ky, kx];
+                        
+                        sumB += pixels[pidx] * wVal;
+                        sumG += pixels[pidx + 1] * wVal;
+                        sumR += pixels[pidx + 2] * wVal;
+                    }
+                }
+                
+                int index = (y * width + x) * 4;
+                result[index] = (byte)Math.Clamp(sumB, 0, 255);
+                result[index + 1] = (byte)Math.Clamp(sumG, 0, 255);
+                result[index + 2] = (byte)Math.Clamp(sumR, 0, 255);
+                result[index + 3] = pixels[index + 3];
+            }
+            
+            int cur = System.Threading.Interlocked.Increment(ref rowsProcessed);
+            if (cur % 5 == 0) progress?.Invoke((double)cur / height * 100.0);
+        });
+        
+        Array.Copy(result, pixels, pixels.Length);
+    }
+
+    public static void ApplyMedianFilter(byte[] pixels, int width, int height, int kw, int kh, Action<double>? progress = null)
+    {
+        int kwHalf = kw / 2;
+        int khHalf = kh / 2;
+        int windowSize = kw * kh;
+        int kHalf = windowSize / 2;
+        
+        byte[] result = new byte[pixels.Length];
+        
+        int rowsProcessed = 0;
+        Parallel.For(0, height, y =>
+        {
+            byte[] windowB = new byte[windowSize];
+            byte[] windowG = new byte[windowSize];
+            byte[] windowR = new byte[windowSize];
+            
+            for (int x = 0; x < width; x++)
+            {
+                int wIdx = 0;
+                for (int ky = 0; ky < kh; ky++)
+                {
+                    for (int kx = 0; kx < kw; kx++)
+                    {
+                        int py = Mirror(y + ky - khHalf, height);
+                        int px = Mirror(x + kx - kwHalf, width);
+                        
+                        int pidx = (py * width + px) * 4;
+                        windowB[wIdx] = pixels[pidx];
+                        windowG[wIdx] = pixels[pidx + 1];
+                        windowR[wIdx] = pixels[pidx + 2];
+                        wIdx++;
+                    }
+                }
+                
+                int index = (y * width + x) * 4;
+                result[index] = QuickSelect((byte[])windowB.Clone(), 0, windowSize - 1, kHalf);
+                result[index + 1] = QuickSelect((byte[])windowG.Clone(), 0, windowSize - 1, kHalf);
+                result[index + 2] = QuickSelect((byte[])windowR.Clone(), 0, windowSize - 1, kHalf);
+                result[index + 3] = pixels[index + 3];
+            }
+            
+            int cur = System.Threading.Interlocked.Increment(ref rowsProcessed);
+            if (cur % 5 == 0) progress?.Invoke((double)cur / height * 100.0);
+        });
+        
+        Array.Copy(result, pixels, pixels.Length);
     }
 }

@@ -108,6 +108,12 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool _isProcessing;
 
     [ObservableProperty]
+    private double _processingProgress;
+
+    [ObservableProperty]
+    private string _lastOperationTime = "0.00 сек";
+
+    [ObservableProperty]
     private bool _isBinarizationEnabled = false;
     partial void OnIsBinarizationEnabledChanged(bool value) => _ = UpdateResultAsync();
 
@@ -123,7 +129,28 @@ public partial class MainWindowViewModel : ViewModelBase
     private double _binarizationK = 0.2;
     partial void OnBinarizationKChanged(double value) => _ = UpdateResultAsync();
 
+    [ObservableProperty]
+    private bool _isFilterEnabled = false;
+    partial void OnIsFilterEnabledChanged(bool value) => _ = UpdateResultAsync();
+
+    [ObservableProperty]
+    private FilterMethod _selectedFilterMethod = FilterMethod.Median;
+    partial void OnSelectedFilterMethodChanged(FilterMethod value) => _ = UpdateResultAsync();
+
+    [ObservableProperty]
+    private int _filterWindowWidth = 13;
+    partial void OnFilterWindowWidthChanged(int value) => _ = UpdateResultAsync();
+
+    [ObservableProperty]
+    private int _filterWindowHeight = 13;
+    partial void OnFilterWindowHeightChanged(int value) => _ = UpdateResultAsync();
+
+    [ObservableProperty]
+    private double _filterSigma = 3.0;
+    partial void OnFilterSigmaChanged(double value) => _ = UpdateResultAsync();
+
     public ObservableCollection<BinarizationMethod> BinarizationMethods { get; } = new(Enum.GetValues<BinarizationMethod>());
+    public ObservableCollection<FilterMethod> FilterMethods { get; } = new(Enum.GetValues<FilterMethod>());
 
     public ObservableCollection<ImageOperation> Operations { get; } = new(Enum.GetValues<ImageOperation>());
     public ObservableCollection<ChannelMode> Channels { get; } = new(Enum.GetValues<ChannelMode>());
@@ -305,20 +332,34 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         
         IsProcessing = true;
+        ProcessingProgress = 0;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             var oldImage = ResultImage;
             byte[]? lut = GetLutAndCurve();
+            
+            var progress = new Progress<double>(p => ProcessingProgress = p);
+
             var processResult = await ImageProcessor.ProcessLayersAsync(
                 Layers.ToList(), 
                 lut,
                 IsBinarizationEnabled,
                 SelectedBinarizationMethod,
                 BinarizationWindowSize,
-                BinarizationK);
+                BinarizationK,
+                IsFilterEnabled,
+                SelectedFilterMethod,
+                FilterWindowWidth,
+                FilterWindowHeight,
+                FilterSigma,
+                progress);
             
             ResultImage = processResult.Image;
             UpdateHistogram(processResult.Histogram);
+
+            sw.Stop();
+            LastOperationTime = $"{sw.ElapsedMilliseconds / 1000.0:F2} сек";
 
             oldImage?.Dispose();
         }

@@ -8,7 +8,7 @@
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/avalonia-logo.ico"
         DragDrop.AllowDrop="True"
-        Title="Две первые лабы сцои" Width="1200" Height="800">
+        Title="СЦОИ" Width="1200" Height="800">
 
     <Design.DataContext>
         <vm:MainWindowViewModel/>
@@ -17,13 +17,30 @@
     <Grid ColumnDefinitions="450, *">
         <!-- Settings Panel -->
         <Border Grid.Column="0" BorderBrush="Gray" BorderThickness="0,0,1,0" Padding="15">
-            <Grid RowDefinitions="Auto, *, Auto">
+            <Grid RowDefinitions="Auto, *, Auto, Auto">
                 <StackPanel Grid.Row="0" Spacing="10" Margin="0,0,0,10">
                     <TextBlock Text="Слои (снизу вверх)" FontWeight="Bold" FontSize="18"/>
                     <Button Content="+ Добавить изображение(я)..." Command="{Binding AddLayerCommand}" HorizontalAlignment="Stretch" Background="#1c75bc" Foreground="White" FontWeight="Bold"/>
 
                     <Border BorderBrush="#444" BorderThickness="1" CornerRadius="5" Padding="10" Background="#111">
                         <StackPanel Spacing="5">
+                            <CheckBox Content="Включить фильтрацию" IsChecked="{Binding IsFilterEnabled}" FontWeight="Bold"/>
+                            <StackPanel IsVisible="{Binding IsFilterEnabled}" Spacing="5" Margin="0,5,0,0">
+                                <ComboBox ItemsSource="{Binding FilterMethods}" SelectedItem="{Binding SelectedFilterMethod}" HorizontalAlignment="Stretch"/>
+                                <Grid ColumnDefinitions="Auto, *" RowDefinitions="Auto, Auto, Auto">
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding FilterWindowWidth, StringFormat='{}Ширина окна: {0}'}" Width="110" FontSize="12" VerticalAlignment="Center"/>
+                                    <Slider Grid.Row="0" Grid.Column="1" Minimum="3" Maximum="151" TickFrequency="2" IsSnapToTickEnabled="True" Value="{Binding FilterWindowWidth}" Margin="5,0"/>
+                                    
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding FilterWindowHeight, StringFormat='{}Высота окна: {0}'}" Width="110" FontSize="12" VerticalAlignment="Center"/>
+                                    <Slider Grid.Row="1" Grid.Column="1" Minimum="3" Maximum="151" TickFrequency="2" IsSnapToTickEnabled="True" Value="{Binding FilterWindowHeight}" Margin="5,0"/>
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding FilterSigma, StringFormat='{}Сигма: {0:F1}'}" Width="110" FontSize="12" VerticalAlignment="Center"/>
+                                    <Slider Grid.Row="2" Grid.Column="1" Minimum="0.1" Maximum="20" TickFrequency="0.1" Value="{Binding FilterSigma}" Margin="5,0"/>
+                                </Grid>
+                            </StackPanel>
+                            
+                            <Separator Background="#333" Margin="0,5"/>
+
                             <CheckBox Content="Включить бинаризацию" IsChecked="{Binding IsBinarizationEnabled}" FontWeight="Bold"/>
                             <StackPanel IsVisible="{Binding IsBinarizationEnabled}" Spacing="5" Margin="0,5,0,0">
                                 <ComboBox ItemsSource="{Binding BinarizationMethods}" SelectedItem="{Binding SelectedBinarizationMethod}" HorizontalAlignment="Stretch"/>
@@ -68,6 +85,8 @@
                 </ScrollViewer>
 
                 <Button Grid.Row="2" Content="Сохранить результат..." Command="{Binding SaveResultCommand}" HorizontalAlignment="Stretch" Margin="0,15,0,0"/>
+
+                <TextBlock Grid.Row="3" Text="{Binding LastOperationTime, StringFormat='{}Время выполнения: {0}'}" Foreground="Gray" FontSize="11" Margin="0,5,0,0" HorizontalAlignment="Left"/>
             </Grid>
         </Border>
 
@@ -136,9 +155,12 @@
                 </Grid>
             </Border>
 
-            <!-- <Border Grid.RowSpan="2" Background="#A0000000" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="20" CornerRadius="8" IsVisible="{Binding IsProcessing}">
-                <TextBlock Text="Пересчет слоев..." Foreground="White" FontSize="18" FontWeight="Bold"/>
-            </Border> -->
+            <Border Grid.RowSpan="2" Background="#A0000000" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="20" CornerRadius="8" IsVisible="{Binding IsProcessing}">
+                <StackPanel Spacing="10" HorizontalAlignment="Center">
+                    <TextBlock Text="{Binding ProcessingProgress, StringFormat='{}Пересчет изображения... {0:F0}%'}" Foreground="White" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center"/>
+                    <ProgressBar IsIndeterminate="False" Value="{Binding ProcessingProgress}" Minimum="0" Maximum="100" Foreground="#1c75bc" Background="#333" Height="8" HorizontalAlignment="Stretch" MinWidth="200" CornerRadius="4"/>
+                </StackPanel>
+            </Border>
         </Grid>
     </Grid>
 </Window>
