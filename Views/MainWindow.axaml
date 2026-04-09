@@ -41,6 +41,26 @@
                             
                             <Separator Background="#333" Margin="0,5"/>
 
+                            <CheckBox Content="Фурье-фильтрация" IsChecked="{Binding IsFourierEnabled}" FontWeight="Bold"/>
+                            <StackPanel IsVisible="{Binding IsFourierEnabled}" Spacing="5" Margin="0,5,0,0">
+                                <ComboBox ItemsSource="{Binding FourierFilters}" SelectedItem="{Binding SelectedFourierFilter}" HorizontalAlignment="Stretch"/>
+                                <Grid ColumnDefinitions="Auto, *" RowDefinitions="Auto, Auto, Auto, Auto">
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding FourierR1, StringFormat='{}Радиус R1: {0:F0}'}" Width="110" FontSize="12" VerticalAlignment="Center"/>
+                                    <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="500" Value="{Binding FourierR1}" Margin="5,0"/>
+                                    
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding FourierR2, StringFormat='{}Радиус R2: {0:F0}'}" Width="110" FontSize="12" VerticalAlignment="Center"/>
+                                    <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="500" Value="{Binding FourierR2}" Margin="5,0"/>
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding FourierCx, StringFormat='{}Коорд Cx: {0}'}" Width="110" FontSize="12" VerticalAlignment="Center"/>
+                                    <Slider Grid.Row="2" Grid.Column="1" Minimum="-200" Maximum="200" Value="{Binding FourierCx}" Margin="5,0"/>
+
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding FourierCy, StringFormat='{}Коорд Cy: {0}'}" Width="110" FontSize="12" VerticalAlignment="Center"/>
+                                    <Slider Grid.Row="3" Grid.Column="1" Minimum="-200" Maximum="200" Value="{Binding FourierCy}" Margin="5,0"/>
+                                </Grid>
+                            </StackPanel>
+
+                            <Separator Background="#333" Margin="0,5"/>
+
                             <CheckBox Content="Включить бинаризацию" IsChecked="{Binding IsBinarizationEnabled}" FontWeight="Bold"/>
                             <StackPanel IsVisible="{Binding IsBinarizationEnabled}" Spacing="5" Margin="0,5,0,0">
                                 <ComboBox ItemsSource="{Binding BinarizationMethods}" SelectedItem="{Binding SelectedBinarizationMethod}" HorizontalAlignment="Stretch"/>
@@ -94,7 +114,11 @@
         <Grid Grid.Column="1" Background="#202020" RowDefinitions="*, 300">
             <Image Grid.Row="0" Source="{Binding ResultImage}" Stretch="Uniform" Margin="20"/>
             
-            <Border Grid.Row="1" Background="#303030" Padding="15" Margin="20,0,20,20" CornerRadius="8">
+            <!-- Panels Container -->
+            <Grid Grid.Row="1" ColumnDefinitions="*, *" Margin="20,0,20,20">
+                
+                <!-- Hist/Curve Panel -->
+                <Border Grid.Column="1" Background="#303030" Padding="15" CornerRadius="8" Margin="10,0,0,0">
                 <Grid ColumnDefinitions="256, *">
                     <!-- Histogram and Curve Canvas -->
                     <Border Grid.Column="0" Width="256" Height="256" Background="Black" BorderBrush="Gray" BorderThickness="1">
@@ -154,6 +178,26 @@
                     </StackPanel>
                 </Grid>
             </Border>
+
+            <!-- Fourier Panel -->
+            <Border Grid.Row="1" Grid.Column="0" Background="#303030" Padding="15" CornerRadius="8" Margin="0,0,10,0">
+                <Grid ColumnDefinitions="*, *">
+                    <StackPanel Grid.Column="0" Margin="0,0,5,0">
+                        <TextBlock Text="Фурье-образ (спектр)" Foreground="Gray" FontSize="12" Margin="0,0,0,5"/>
+                        <Border Background="Black" BorderBrush="Gray" BorderThickness="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                            <Image Source="{Binding SpectrumImage}" Stretch="Uniform"/>
+                        </Border>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Margin="5,0,0,0">
+                        <TextBlock Text="Маска фильтра" Foreground="Gray" FontSize="12" Margin="0,0,0,5"/>
+                        <Border Background="Black" BorderBrush="Gray" BorderThickness="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                            <Image Source="{Binding MaskImage}" Stretch="Uniform"/>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            </Grid>
 
             <Border Grid.RowSpan="2" Background="#A0000000" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="20" CornerRadius="8" IsVisible="{Binding IsProcessing}">
                 <StackPanel Spacing="10" HorizontalAlignment="Center">

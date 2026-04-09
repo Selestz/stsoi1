@@ -27,6 +27,12 @@ public partial class MainWindowViewModel : ViewModelBase
     private string _pointsText = "0,0; 128,128; 255,255";
 
     [ObservableProperty]
+    private WriteableBitmap? _spectrumImage;
+
+    [ObservableProperty]
+    private WriteableBitmap? _maskImage;
+
+    [ObservableProperty]
     private ObservableCollection<CurvePointViewModel> _editorPoints = new();
 
     [ObservableProperty]
@@ -149,8 +155,33 @@ public partial class MainWindowViewModel : ViewModelBase
     private double _filterSigma = 3.0;
     partial void OnFilterSigmaChanged(double value) => _ = UpdateResultAsync();
 
+    [ObservableProperty]
+    private bool _isFourierEnabled = false;
+    partial void OnIsFourierEnabledChanged(bool value) => _ = UpdateResultAsync();
+
+    [ObservableProperty]
+    private FourierFilterType _selectedFourierFilter = FourierFilterType.LowPass;
+    partial void OnSelectedFourierFilterChanged(FourierFilterType value) => _ = UpdateResultAsync();
+
+    [ObservableProperty]
+    private double _fourierR1 = 20;
+    partial void OnFourierR1Changed(double value) => _ = UpdateResultAsync();
+
+    [ObservableProperty]
+    private double _fourierR2 = 80;
+    partial void OnFourierR2Changed(double value) => _ = UpdateResultAsync();
+
+    [ObservableProperty]
+    private int _fourierCx = 50;
+    partial void OnFourierCxChanged(int value) => _ = UpdateResultAsync();
+
+    [ObservableProperty]
+    private int _fourierCy = 50;
+    partial void OnFourierCyChanged(int value) => _ = UpdateResultAsync();
+
     public ObservableCollection<BinarizationMethod> BinarizationMethods { get; } = new(Enum.GetValues<BinarizationMethod>());
     public ObservableCollection<FilterMethod> FilterMethods { get; } = new(Enum.GetValues<FilterMethod>());
+    public ObservableCollection<FourierFilterType> FourierFilters { get; } = new(Enum.GetValues<FourierFilterType>());
 
     public ObservableCollection<ImageOperation> Operations { get; } = new(Enum.GetValues<ImageOperation>());
     public ObservableCollection<ChannelMode> Channels { get; } = new(Enum.GetValues<ChannelMode>());
@@ -353,15 +384,28 @@ public partial class MainWindowViewModel : ViewModelBase
                 FilterWindowWidth,
                 FilterWindowHeight,
                 FilterSigma,
+                IsFourierEnabled,
+                SelectedFourierFilter,
+                FourierR1,
+                FourierR2,
+                FourierCx,
+                FourierCy,
                 progress);
             
+            var oldS = SpectrumImage;
+            var oldM = MaskImage;
+
             ResultImage = processResult.Image;
+            SpectrumImage = processResult.SpectrumImage;
+            MaskImage = processResult.MaskImage;
             UpdateHistogram(processResult.Histogram);
 
             sw.Stop();
             LastOperationTime = $"{sw.ElapsedMilliseconds / 1000.0:F2} сек";
 
             oldImage?.Dispose();
+            oldS?.Dispose();
+            oldM?.Dispose();
         }
         finally
         {

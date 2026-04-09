@@ -18,6 +18,8 @@ public enum FilterMethod { None, Median, Gaussian, Linear }
 public class ProcessResult
 {
     public WriteableBitmap? Image { get; set; }
+    public WriteableBitmap? SpectrumImage { get; set; }
+    public WriteableBitmap? MaskImage { get; set; }
     public int[]? Histogram { get; set; }
 }
 
@@ -181,6 +183,12 @@ public class ImageProcessor
         int filterKw = 13,
         int filterKh = 13,
         double filterSigma = 3.0,
+        bool enableFourier = false,
+        FourierFilterType fourierType = FourierFilterType.None,
+        double fourierR1 = 10,
+        double fourierR2 = 50,
+        int fourierCx = 20,
+        int fourierCy = 20,
         IProgress<double>? progress = null)
     {
         if (layers == null || layers.Count == 0) return new ProcessResult();
@@ -189,7 +197,7 @@ public class ImageProcessor
         {
             try
             {
-                int totalStages = 1 /* blend */ + (enableFilter && filterMethod != FilterMethod.None ? 1 : 0) + (enableBinarization && binMethod != BinarizationMethod.None ? 1 : 0) + 1 /* hist */;
+                int totalStages = 1 /* blend */ + (enableFilter && filterMethod != FilterMethod.None ? 1 : 0) + (enableFourier && fourierType != FourierFilterType.None ? 3 : 0) + (enableBinarization && binMethod != BinarizationMethod.None ? 1 : 0) + 1 /* hist */;
                 double currentStage = 0;
                 double stageWeight = 100.0 / totalStages;
                 Action<double> report = (percent) => progress?.Report(currentStage * stageWeight + percent * stageWeight / 100.0);
@@ -327,6 +335,65 @@ public class ImageProcessor
                     report(0);
                 }
 
+                byte[]? spectrumPixels = null;
+                byte[]? maskPixels = null;
+                int fourierW = targetW;
+                int fourierH = targetH;
+
+                if (enableFourier && fourierType != FourierFilterType.None)
+                {
+                    double[,] R = new double[targetH, targetW];
+                    double[,] G = new double[targetH, targetW];
+                    double[,] B = new double[targetH, targetW];
+                    
+                    for (int y = 0; y < targetH; y++)
+                    {
+                        for (int x = 0; x < targetW; x++)
+                        {
+                            int idx = (y * targetW + x) * 4;
+                            B[y, x] = result[idx];
+                            G[y, x] = result[idx + 1];
+                            R[y, x] = result[idx + 2];
+                        }
+                    }
+
+                    var freqR = FourierProcessor.FFT2D(R, targetW, targetH, out fourierW, out fourierH);
+                    var freqG = FourierProcessor.FFT2D(G, targetW, targetH, out _, out _);
+                    var freqB = FourierProcessor.FFT2D(B, targetW, targetH, out _, out _);
+
+                    currentStage++;
+                    report(0);
+                    
+                    spectrumPixels = FourierProcessor.GetSpectrumImage(freqG, fourierType, fourierR1, fourierR2, fourierCx, fourierCy, false);
+                    maskPixels = FourierProcessor.GetSpectrumImage(freqG, fourierType, fourierR1, fourierR2, fourierCx, fourierCy, true);
+
+                    FourierProcessor.ApplyFilter(freqR, fourierType, fourierR1, fourierR2, fourierCx, fourierCy);
+                    FourierProcessor.ApplyFilter(freqG, fourierType, fourierR1, fourierR2, fourierCx, fourierCy);
+                    FourierProcessor.ApplyFilter(freqB, fourierType, fourierR1, fourierR2, fourierCx, fourierCy);
+
+                    currentStage++;
+                    report(0);
+
+                    double[,] outR = FourierProcessor.IFFT2D(freqR, targetW, targetH);
+                    double[,] outG = FourierProcessor.IFFT2D(freqG, targetW, targetH);
+                    double[,] outB = FourierProcessor.IFFT2D(freqB, targetW, targetH);
+
+                    Parallel.For(0, targetH, y =>
+                    {
+                        for (int x = 0; x < targetW; x++)
+                        {
+                            int idx = (y * targetW + x) * 4;
+                            result[idx]     = (byte)Math.Clamp(outB[y, x], 0, 255);
+                            result[idx + 1] = (byte)Math.Clamp(outG[y, x], 0, 255);
+                            result[idx + 2] = (byte)Math.Clamp(outR[y, x], 0, 255);
+                            result[idx + 3] = 255;
+                        }
+                    });
+
+                    currentStage++;
+                    report(0);
+                }
+
                 if (enableBinarization && binMethod != BinarizationMethod.None)
                 {
                     ApplyBinarization(result, targetW, targetH, binMethod, binWindowSize, binK, report);
@@ -366,7 +433,19 @@ public class ImageProcessor
                     System.Runtime.InteropServices.Marshal.Copy(result, 0, fb.Address, result.Length);
                 }
 
-                return new ProcessResult { Image = resultBmp, Histogram = hist };
+                WriteableBitmap? spectrumBmp = null;
+                WriteableBitmap? maskBmp = null;
+
+                if (spectrumPixels != null && maskPixels != null && fourierW > 0 && fourierH > 0)
+                {
+                    spectrumBmp = new WriteableBitmap(new PixelSize(fourierW, fourierH), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Opaque);
+                    using (var fb = spectrumBmp.Lock()) System.Runtime.InteropServices.Marshal.Copy(spectrumPixels, 0, fb.Address, spectrumPixels.Length);
+
+                    maskBmp = new WriteableBitmap(new PixelSize(fourierW, fourierH), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Opaque);
+                    using (var fb = maskBmp.Lock()) System.Runtime.InteropServices.Marshal.Copy(maskPixels, 0, fb.Address, maskPixels.Length);
+                }
+
+                return new ProcessResult { Image = resultBmp, SpectrumImage = spectrumBmp, MaskImage = maskBmp, Histogram = hist };
             }
             catch(Exception)
             {
