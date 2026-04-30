@@ -160,7 +160,7 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnIsFourierEnabledChanged(bool value) => _ = UpdateResultAsync();
 
     [ObservableProperty]
-    private FourierFilterType _selectedFourierFilter = FourierFilterType.LowPass;
+    private FourierFilterType _selectedFourierFilter = FourierFilterType.Низкочастотный;
     partial void OnSelectedFourierFilterChanged(FourierFilterType value) => _ = UpdateResultAsync();
 
     [ObservableProperty]

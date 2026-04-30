@@ -184,7 +184,7 @@ public class ImageProcessor
         int filterKh = 13,
         double filterSigma = 3.0,
         bool enableFourier = false,
-        FourierFilterType fourierType = FourierFilterType.None,
+        FourierFilterType fourierType = FourierFilterType.Отключен,
         double fourierR1 = 10,
         double fourierR2 = 50,
         int fourierCx = 20,
@@ -197,7 +197,7 @@ public class ImageProcessor
         {
             try
             {
-                int totalStages = 1 /* blend */ + (enableFilter && filterMethod != FilterMethod.None ? 1 : 0) + (enableFourier && fourierType != FourierFilterType.None ? 3 : 0) + (enableBinarization && binMethod != BinarizationMethod.None ? 1 : 0) + 1 /* hist */;
+                int totalStages = 1 /* blend */ + (enableFilter && filterMethod != FilterMethod.None ? 1 : 0) + (enableFourier && fourierType != FourierFilterType.Отключен ? 3 : 0) + (enableBinarization && binMethod != BinarizationMethod.None ? 1 : 0) + 1 /* hist */;
                 double currentStage = 0;
                 double stageWeight = 100.0 / totalStages;
                 Action<double> report = (percent) => progress?.Report(currentStage * stageWeight + percent * stageWeight / 100.0);
@@ -340,7 +340,7 @@ public class ImageProcessor
                 int fourierW = targetW;
                 int fourierH = targetH;
 
-                if (enableFourier && fourierType != FourierFilterType.None)
+                if (enableFourier && fourierType != FourierFilterType.Отключен)
                 {
                     double[,] R = new double[targetH, targetW];
                     double[,] G = new double[targetH, targetW];

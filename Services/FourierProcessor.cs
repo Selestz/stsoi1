@@ -6,13 +6,13 @@ namespace AvaloniaApp.Services;
 
 public enum FourierFilterType
 {
-    None,
-    LowPass,
-    HighPass,
-    BandStop,
-    BandPass,
-    NotchStop,
-    NotchPass
+    Отключен,
+    Низкочастотный,
+    Высокочастотный,
+    Режекторный,
+    Полосовой,
+    Узкополосный_Режекторный,
+    Узкополосный_Полосовой
 }
 
 public class FourierProcessor
@@ -164,7 +164,7 @@ public class FourierProcessor
 
     public static void ApplyFilter(Complex[,] freqData, FourierFilterType type, double r1, double r2, int cx, int cy)
     {
-        if (type == FourierFilterType.None) return;
+        if (type == FourierFilterType.Отключен) return;
 
         int h = freqData.GetLength(0);
         int w = freqData.GetLength(1);
@@ -185,22 +185,22 @@ public class FourierProcessor
 
                 switch (type)
                 {
-                    case FourierFilterType.LowPass:
+                    case FourierFilterType.Низкочастотный:
                         if (dVector > r1) keep = false;
                         break;
-                    case FourierFilterType.HighPass:
+                    case FourierFilterType.Высокочастотный:
                         if (dVector < r1) keep = false;
                         break;
-                    case FourierFilterType.BandStop:
+                    case FourierFilterType.Режекторный:
                         if (dVector >= r1 && dVector <= r2) keep = false;
                         break;
-                    case FourierFilterType.BandPass:
+                    case FourierFilterType.Полосовой:
                         if (dVector < r1 || dVector > r2) keep = false;
                         break;
-                    case FourierFilterType.NotchStop:
+                    case FourierFilterType.Узкополосный_Режекторный:
                         if (d1 <= r1 || d2 <= r1) keep = false;
                         break;
-                    case FourierFilterType.NotchPass:
+                    case FourierFilterType.Узкополосный_Полосовой:
                         if (d1 > r1 && d2 > r1) keep = false;
                         break;
                 }
@@ -235,12 +235,12 @@ public class FourierProcessor
                     bool keep = true;
                     switch (type)
                     {
-                        case FourierFilterType.LowPass: keep = (dVector <= r1); break;
-                        case FourierFilterType.HighPass: keep = (dVector >= r1); break;
-                        case FourierFilterType.BandStop: keep = (dVector < r1 || dVector > r2); break;
-                        case FourierFilterType.BandPass: keep = (dVector >= r1 && dVector <= r2); break;
-                        case FourierFilterType.NotchStop: keep = (d1 > r1 && d2 > r1); break;
-                        case FourierFilterType.NotchPass: keep = (d1 <= r1 || d2 <= r1); break;
+                        case FourierFilterType.Низкочастотный: keep = (dVector <= r1); break;
+                        case FourierFilterType.Высокочастотный: keep = (dVector >= r1); break;
+                        case FourierFilterType.Режекторный: keep = (dVector < r1 || dVector > r2); break;
+                        case FourierFilterType.Полосовой: keep = (dVector >= r1 && dVector <= r2); break;
+                        case FourierFilterType.Узкополосный_Режекторный: keep = (d1 > r1 && d2 > r1); break;
+                        case FourierFilterType.Узкополосный_Полосовой: keep = (d1 <= r1 || d2 <= r1); break;
                     }
 
                     byte val = keep ? (byte)255 : (byte)0;
